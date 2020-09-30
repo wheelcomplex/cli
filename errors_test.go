@@ -39,7 +39,7 @@ func TestHandleExitCoder_ExitCoder(t *testing.T) {
 
 	defer func() { OsExiter = fakeOsExiter }()
 
-	HandleExitCoder(NewExitError("galactic perimeter breach", 9))
+	HandleExitCoder(Exit("galactic perimeter breach", 9))
 
 	expect(t, exitCode, 9)
 	expect(t, called, true)
@@ -58,12 +58,32 @@ func TestHandleExitCoder_MultiErrorWithExitCoder(t *testing.T) {
 
 	defer func() { OsExiter = fakeOsExiter }()
 
-	exitErr := NewExitError("galactic perimeter breach", 9)
-	exitErr2 := NewExitError("last ExitCoder", 11)
-	err := NewMultiError(errors.New("wowsa"), errors.New("egad"), exitErr, exitErr2)
+	exitErr := Exit("galactic perimeter breach", 9)
+	exitErr2 := Exit("last ExitCoder", 11)
+	err := newMultiError(errors.New("wowsa"), errors.New("egad"), exitErr, exitErr2)
 	HandleExitCoder(err)
 
 	expect(t, exitCode, 11)
+	expect(t, called, true)
+}
+
+func TestHandleExitCoder_MultiErrorWithoutExitCoder(t *testing.T) {
+	exitCode := 0
+	called := false
+
+	OsExiter = func(rc int) {
+		if !called {
+			exitCode = rc
+			called = true
+		}
+	}
+
+	defer func() { OsExiter = fakeOsExiter }()
+
+	err := newMultiError(errors.New("wowsa"), errors.New("egad"))
+	HandleExitCoder(err)
+
+	expect(t, exitCode, 1)
 	expect(t, called, true)
 }
 
@@ -95,7 +115,7 @@ func TestHandleExitCoder_ErrorWithFormat(t *testing.T) {
 		ErrWriter = fakeErrWriter
 	}()
 
-	err := NewExitError(NewErrorWithFormat("I am formatted"), 1)
+	err := Exit(NewErrorWithFormat("I am formatted"), 1)
 	HandleExitCoder(err)
 
 	expect(t, called, true)
@@ -114,7 +134,7 @@ func TestHandleExitCoder_MultiErrorWithFormat(t *testing.T) {
 
 	defer func() { OsExiter = fakeOsExiter }()
 
-	err := NewMultiError(NewErrorWithFormat("err1"), NewErrorWithFormat("err2"))
+	err := newMultiError(NewErrorWithFormat("err1"), NewErrorWithFormat("err2"))
 	HandleExitCoder(err)
 
 	expect(t, called, true)

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 // NewJSONSourceFromFlagFunc returns a func that takes a cli.Context
@@ -17,7 +17,11 @@ import (
 // by the given flag.
 func NewJSONSourceFromFlagFunc(flag string) func(c *cli.Context) (InputSourceContext, error) {
 	return func(context *cli.Context) (InputSourceContext, error) {
-		return NewJSONSourceFromFile(context.String(flag))
+		if context.IsSet(flag) {
+			return NewJSONSourceFromFile(context.String(flag))
+		}
+
+		return defaultInputSource()
 	}
 }
 
@@ -29,6 +33,7 @@ func NewJSONSourceFromFile(f string) (InputSourceContext, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return NewJSONSource(data)
 }
 
@@ -52,6 +57,10 @@ func NewJSONSource(data []byte) (InputSourceContext, error) {
 	return &jsonSource{deserialized: deserialized}, nil
 }
 
+func (x *jsonSource) Source() string {
+	return x.file
+}
+
 func (x *jsonSource) Int(name string) (int, error) {
 	i, err := x.getValue(name)
 	if err != nil {
@@ -62,10 +71,10 @@ func (x *jsonSource) Int(name string) (int, error) {
 		return 0, fmt.Errorf("unexpected type %T for %q", i, name)
 	case int:
 		return v, nil
-	case float64:
-		return int(float64(v)), nil
 	case float32:
-		return int(float32(v)), nil
+		return int(v), nil
+	case float64:
+		return int(v), nil
 	}
 }
 
@@ -74,9 +83,9 @@ func (x *jsonSource) Duration(name string) (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
-	v, ok := (time.Duration)(0), false
-	if v, ok = i.(time.Duration); !ok {
-		return v, fmt.Errorf("unexpected type %T for %q", i, name)
+	v, ok := i.(time.Duration)
+	if !ok {
+		return 0, fmt.Errorf("unexpected type %T for %q", i, name)
 	}
 	return v, nil
 }
@@ -86,9 +95,9 @@ func (x *jsonSource) Float64(name string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	v, ok := (float64)(0), false
-	if v, ok = i.(float64); !ok {
-		return v, fmt.Errorf("unexpected type %T for %q", i, name)
+	v, ok := i.(float64)
+	if !ok {
+		return 0, fmt.Errorf("unexpected type %T for %q", i, name)
 	}
 	return v, nil
 }
@@ -98,9 +107,9 @@ func (x *jsonSource) String(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	v, ok := "", false
-	if v, ok = i.(string); !ok {
-		return v, fmt.Errorf("unexpected type %T for %q", i, name)
+	v, ok := i.(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected type %T for %q", i, name)
 	}
 	return v, nil
 }
@@ -156,9 +165,9 @@ func (x *jsonSource) Generic(name string) (cli.Generic, error) {
 	if err != nil {
 		return nil, err
 	}
-	v, ok := (cli.Generic)(nil), false
-	if v, ok = i.(cli.Generic); !ok {
-		return v, fmt.Errorf("unexpected type %T for %q", i, name)
+	v, ok := i.(cli.Generic)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type %T for %q", i, name)
 	}
 	return v, nil
 }
@@ -168,17 +177,11 @@ func (x *jsonSource) Bool(name string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	v, ok := false, false
-	if v, ok = i.(bool); !ok {
-		return v, fmt.Errorf("unexpected type %T for %q", i, name)
+	v, ok := i.(bool)
+	if !ok {
+		return false, fmt.Errorf("unexpected type %T for %q", i, name)
 	}
 	return v, nil
-}
-
-// since this source appears to require all configuration to be specified, the
-// concept of a boolean defaulting to true seems inconsistent with no defaults
-func (x *jsonSource) BoolT(name string) (bool, error) {
-	return false, fmt.Errorf("unsupported type BoolT for JSONSource")
 }
 
 func (x *jsonSource) getValue(key string) (interface{}, error) {
@@ -204,5 +207,6 @@ func jsonGetValue(key string, m map[string]interface{}) (interface{}, error) {
 }
 
 type jsonSource struct {
+	file         string
 	deserialized map[string]interface{}
 }
